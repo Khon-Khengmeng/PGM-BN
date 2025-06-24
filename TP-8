@@ -1,38 +1,55 @@
 import numpy as np
-from hmmlearn import hmm
 import matplotlib.pyplot as plt
+from hmmlearn.hmm import GaussianHMM
 
-# Step 1: Define hidden states
-states = ["Bull", "Bear"]
-n_states = len(states)
-
-# Step 2: Simulate observed data (returns)
 np.random.seed(42)
-n_samples = 300
 
-# Bull: mean +0.02, std 0.01
-bull_returns = np.random.normal(loc=0.02, scale=0.01, size=n_samples // 2)
+# Hidden states: Bull (0) and Bear (1)
+states = ["Bull", "Bear"]
+n_samples = 1000
 
-# Bear: mean -0.02, std 0.01
-bear_returns = np.random.normal(loc=-0.02, scale=0.01, size=n_samples // 2)
+# Transition probabilities
+trans_mat = np.array([[0.9, 0.1],  # Bull -> Bull, Bear
+                      [0.2, 0.8]]) # Bear -> Bull, Bear
 
-# Combine and reshape for HMM
-observations = np.concatenate([bull_returns, bear_returns]).reshape(-1, 1)
+# Means and variances for each state
+means = [1.0, -1.0]  # Bull increases, Bear decreases
+stds = [0.5, 1.0]
 
-# Step 3: Define and train Gaussian HMM
-model = hmm.GaussianHMM(n_components=2, covariance_type="diag", n_iter=100)
-model.fit(observations)
+# Generate hidden states
+hidden_states = [0]
+for _ in range(n_samples - 1):
+    current_state = hidden_states[-1]
+    next_state = np.random.choice([0, 1], p=trans_mat[current_state])
+    hidden_states.append(next_state)
 
-# Step 4: Predict hidden states
-hidden_states = model.predict(observations)
+# Generate observations based on hidden states
+returns = [np.random.normal(means[state], stds[state]) for state in hidden_states]
+prices = 100 + np.cumsum(returns)  # Simulated stock prices
 
-# Plot the results
-plt.figure(figsize=(12, 4))
-plt.plot(observations, label="Returns")
-plt.plot(hidden_states, label="Hidden State", alpha=0.7)
+
+# Reshape returns to 2D array (n_samples, n_features)
+X = np.array(returns).reshape(-1, 1)
+
+# Define and train HMM
+model = GaussianHMM(n_components=2, covariance_type="diag", n_iter=1000)
+model.fit(X)
+
+# Predict the hidden states
+predicted_states = model.predict(X)
+
+plt.figure(figsize=(15, 6))
+
+plt.plot(prices, label="Simulated Stock Price", color='black')
+plt.title("Simulated Stock Prices and Hidden States")
+
+for state in range(model.n_components):
+    idx = predicted_states == state
+    plt.plot(np.where(idx)[0], np.array(prices)[idx], ".", label=f"Predicted State {state}")
+
 plt.legend()
-plt.title("HMM Prediction of Market States")
 plt.xlabel("Time")
-plt.ylabel("Return")
-plt.grid()
+plt.ylabel("Price")
+plt.grid(True)
 plt.show()
+
