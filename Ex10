@@ -1,1 +1,199 @@
-# PGM-BN
+from collections import defaultdict
+class BayesianNetwork:
+    def __init__(self):
+        self.cpds = {}
+        self.structure = defaultdict(list)
+    
+    def add_cpd(self, variable, parents, cpd):
+        """Add a conditional probability distribution"""
+        self.cpds[variable] = {'parents': parents, 'table': cpd}
+        for parent in parents:
+            self.structure[parent].append(variable)
+    
+    def get_probability(self, variable, value, evidence):
+        """Get P(variable=value | evidence)"""
+        if variable not in self.cpds:
+            raise ValueError(f"Unknown variable: {variable}")
+        
+        # For root nodes
+        if not self.cpds[variable]['parents']:
+            return self.cpds[variable]['table'][value]
+        
+        # For nodes with parents
+        parent_values = tuple(evidence[parent] for parent in self.cpds[variable]['parents'])
+        return self.cpds[variable]['table'][parent_values][value]
+    
+    def infer(self, query_vars, evidence):
+        """Simple inference using enumeration (not efficient for large networks)"""
+        # This is a simplified version - real implementation would be more sophisticated
+        if len(query_vars) > 1:
+            raise ValueError("This simple implementation only supports single variable queries")
+        
+        query_var = query_vars[0]
+        
+        # If the query variable is in evidence, just return that value
+        if query_var in evidence:
+            return {evidence[query_var]: 1.0}
+        
+        # Calculate marginal probability by summing over all possible values
+        prob_dist = {}
+        for value in self.cpds[query_var]['table'].values():
+            for v in value.keys():
+                prob_dist[v] = 0.0
+        
+        # For each possible value of the query variable
+        for q_value in prob_dist.keys():
+            # Create extended evidence
+            new_evidence = evidence.copy()
+            new_evidence[query_var] = q_value
+            
+            # Calculate joint probability (simplified)
+            joint_prob = 1.0
+            for var in self.cpds:
+                if var in new_evidence:
+                    parents = self.cpds[var]['parents']
+                    parent_evidence = {p: new_evidence[p] for p in parents}
+                    prob = self.get_probability(var, new_evidence[var], parent_evidence)
+                    joint_prob *= prob
+            
+            prob_dist[q_value] = joint_prob
+        
+        # Normalize probabilities
+        total = sum(prob_dist.values())
+        if total > 0:
+            for key in prob_dist:
+                prob_dist[key] /= total
+        
+        return prob_dist
+import numpy as np
+import pandas as pd
+
+
+# Set random seed for reproducibility
+np.random.seed(42)
+
+# Generate synthetic data
+num_customers = 1000
+
+# Usage Frequency (1=Low, 2=Medium, 3=High)
+usage_freq = np.random.choice([1, 2, 3], size=num_customers, p=[0.2, 0.5, 0.3])
+
+# Customer Satisfaction (depends on usage frequency)
+satisfaction = np.zeros(num_customers)
+for i in range(num_customers):
+    if usage_freq[i] == 1:  # Low usage
+        satisfaction[i] = np.random.choice([1, 2, 3], p=[0.6, 0.3, 0.1])
+    elif usage_freq[i] == 2:  # Medium usage
+        satisfaction[i] = np.random.choice([1, 2, 3], p=[0.2, 0.6, 0.2])
+    else:  # High usage
+        satisfaction[i] = np.random.choice([1, 2, 3], p=[0.1, 0.3, 0.6])
+
+# Churn (depends on both usage frequency and satisfaction)
+churn = np.zeros(num_customers)
+for i in range(num_customers):
+    prob_churn = 0.0
+    if usage_freq[i] == 1 and satisfaction[i] == 1:
+        prob_churn = 0.9
+    elif usage_freq[i] == 1 and satisfaction[i] == 2:
+        prob_churn = 0.7
+    elif usage_freq[i] == 1 and satisfaction[i] == 3:
+        prob_churn = 0.5
+    elif usage_freq[i] == 2 and satisfaction[i] == 1:
+        prob_churn = 0.7
+    elif usage_freq[i] == 2 and satisfaction[i] == 2:
+        prob_churn = 0.4
+    elif usage_freq[i] == 2 and satisfaction[i] == 3:
+        prob_churn = 0.2
+    elif usage_freq[i] == 3 and satisfaction[i] == 1:
+        prob_churn = 0.5
+    elif usage_freq[i] == 3 and satisfaction[i] == 2:
+        prob_churn = 0.3
+    elif usage_freq[i] == 3 and satisfaction[i] == 3:
+        prob_churn = 0.1
+    
+    churn[i] = 1 if np.random.random() < prob_churn else 0
+
+# Create DataFrame
+data = pd.DataFrame({
+    'UsageFrequency': usage_freq,
+    'Satisfaction': satisfaction,
+    'Churn': churn
+})
+
+# Map numeric values to categories for readability
+data['UsageFrequency'] = data['UsageFrequency'].map({1: 'Low', 2: 'Medium', 3: 'High'})
+data['Satisfaction'] = data['Satisfaction'].map({1: 'Low', 2: 'Medium', 3: 'High'})
+data['Churn'] = data['Churn'].map({0: 'No', 1: 'Yes'})
+
+print(data)
+
+# Initialize network
+bn = BayesianNetwork()
+
+# Add UsageFrequency (root node)
+usage_cpd = {
+    'Low': 0.2,
+    'Medium': 0.5,
+    'High': 0.3
+}
+bn.add_cpd('UsageFrequency', [], usage_cpd)
+
+# Add CustomerSatisfaction
+satisfaction_cpd = {
+    ('Low',): {'Low': 0.6, 'Medium': 0.3, 'High': 0.1},
+    ('Medium',): {'Low': 0.2, 'Medium': 0.6, 'High': 0.2},
+    ('High',): {'Low': 0.1, 'Medium': 0.3, 'High': 0.6}
+}
+bn.add_cpd('Satisfaction', ['UsageFrequency'], satisfaction_cpd)
+
+# Add Churn
+churn_cpd = {
+    ('Low', 'Low'): {'Yes': 0.9, 'No': 0.1},
+    ('Low', 'Medium'): {'Yes': 0.7, 'No': 0.3},
+    ('Low', 'High'): {'Yes': 0.5, 'No': 0.5},
+    ('Medium', 'Low'): {'Yes': 0.7, 'No': 0.3},
+    ('Medium', 'Medium'): {'Yes': 0.4, 'No': 0.6},
+    ('Medium', 'High'): {'Yes': 0.2, 'No': 0.8},
+    ('High', 'Low'): {'Yes': 0.5, 'No': 0.5},
+    ('High', 'Medium'): {'Yes': 0.3, 'No': 0.7},
+    ('High', 'High'): {'Yes': 0.1, 'No': 0.9}
+}
+bn.add_cpd('Churn', ['UsageFrequency', 'Satisfaction'], churn_cpd)
+def infer_satisfaction_given_churn(bn, churn_value):
+    """Proper implementation of P(Satisfaction | Churn)"""
+    # Get all possible satisfaction levels from the CPD structure
+    sat_cpd = bn.cpds['Satisfaction']['table']
+    first_key = next(iter(sat_cpd.keys()))  # Get first key to see the structure
+    sat_levels = list(sat_cpd[first_key].keys())
+    
+    # Initialize results
+    results = {level: 0.0 for level in sat_levels}
+    
+    # Get all possible usage frequencies
+    usage_levels = list(bn.cpds['UsageFrequency']['table'].keys())
+    
+    # Calculate numerator for each satisfaction level
+    for sat in sat_levels:
+        for uf in usage_levels:
+            # P(UsageFrequency=uf)
+            p_uf = bn.cpds['UsageFrequency']['table'][uf]
+            
+            # P(Satisfaction=sat | UsageFrequency=uf)
+            p_sat_given_uf = bn.cpds['Satisfaction']['table'][(uf,)][sat]
+            
+            # P(Churn=churn_value | UsageFrequency=uf, Satisfaction=sat)
+            p_churn = bn.cpds['Churn']['table'][(uf, sat)][churn_value]
+            
+            results[sat] += p_uf * p_sat_given_uf * p_churn
+    
+    # Normalize
+    total = sum(results.values())
+    if total > 0:
+        for sat in results:
+            results[sat] /= total
+    
+    return results
+
+# Now use it:
+print("\nProperly calculated satisfaction given churn:")
+print(infer_satisfaction_given_churn(bn, 'Yes'))
