@@ -1,0 +1,63 @@
+from pgmpy.models import BayesianNetwork
+from pgmpy.factors.discrete import TabularCPD
+from pgmpy.inference import VariableElimination
+
+# Step 1: Define the model structure
+model = BayesianNetwork([
+    ('Flu', 'Cough'),
+    ('Flu', 'Fever'),
+    ('Cold', 'Cough'),
+    ('COVID', 'Fever'),
+    ('COVID', 'Fatigue')
+])
+
+# Step 2: Define CPDs
+cpd_flu = TabularCPD(variable='Flu', variable_card=2, values=[[0.9], [0.1]])  # 10% chance of Flu
+cpd_cold = TabularCPD(variable='Cold', variable_card=2, values=[[0.85], [0.15]])
+cpd_covid = TabularCPD(variable='COVID', variable_card=2, values=[[0.95], [0.05]])
+
+cpd_cough = TabularCPD(
+    variable='Cough', variable_card=2,
+    values=[
+        # ¬Cough
+        [1.0, 0.6, 0.5, 0.2],
+        # Cough
+        [0.0, 0.4, 0.5, 0.8]
+    ],
+    evidence=['Flu', 'Cold'],
+    evidence_card=[2, 2]
+)
+
+cpd_fever = TabularCPD(
+    variable='Fever', variable_card=2,
+    values=[
+        # ¬Fever
+        [1.0, 0.5, 0.6, 0.2],
+        # Fever
+        [0.0, 0.5, 0.4, 0.8]
+    ],
+    evidence=['Flu', 'COVID'],
+    evidence_card=[2, 2]
+)
+
+cpd_fatigue = TabularCPD(
+    variable='Fatigue', variable_card=2,
+    values=[
+        [0.9, 0.3],  # ¬Fatigue
+        [0.1, 0.7]   # Fatigue
+    ],
+    evidence=['COVID'],
+    evidence_card=[2]
+)
+
+# Step 3: Add CPDs to the model
+model.add_cpds(cpd_flu, cpd_cold, cpd_covid, cpd_cough, cpd_fever, cpd_fatigue)
+
+# Check model correctness
+assert model.check_model()
+
+# Step 4: Perform inference
+infer = VariableElimination(model)
+result = infer.query(variables=['Flu'], evidence={'Fever': 1})
+
+print(result)
