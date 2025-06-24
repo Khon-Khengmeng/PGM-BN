@@ -1,0 +1,38 @@
+import numpy as np
+from hmmlearn import hmm
+import matplotlib.pyplot as plt
+
+# Step 1: Define hidden states
+states = ["Bull", "Bear"]
+n_states = len(states)
+
+# Step 2: Simulate observed data (returns)
+np.random.seed(42)
+n_samples = 300
+
+# Bull: mean +0.02, std 0.01
+bull_returns = np.random.normal(loc=0.02, scale=0.01, size=n_samples // 2)
+
+# Bear: mean -0.02, std 0.01
+bear_returns = np.random.normal(loc=-0.02, scale=0.01, size=n_samples // 2)
+
+# Combine and reshape for HMM
+observations = np.concatenate([bull_returns, bear_returns]).reshape(-1, 1)
+
+# Step 3: Define and train Gaussian HMM
+model = hmm.GaussianHMM(n_components=2, covariance_type="diag", n_iter=100)
+model.fit(observations)
+
+# Step 4: Predict hidden states
+hidden_states = model.predict(observations)
+
+# Plot the results
+plt.figure(figsize=(12, 4))
+plt.plot(observations, label="Returns")
+plt.plot(hidden_states, label="Hidden State", alpha=0.7)
+plt.legend()
+plt.title("HMM Prediction of Market States")
+plt.xlabel("Time")
+plt.ylabel("Return")
+plt.grid()
+plt.show()
