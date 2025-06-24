@@ -1,0 +1,52 @@
+from pgmpy.models import BayesianNetwork
+from pgmpy.factors.discrete import TabularCPD
+from pgmpy.sampling import BayesianModelSampling
+import pandas as pd
+
+# Step 1: Define the Bayesian Network Structure
+model = BayesianNetwork([('UserType', 'Interaction'), ('ItemCategory', 'Interaction')])
+
+# Step 2: Define the CPDs
+cpd_user = TabularCPD(variable='UserType', variable_card=3,
+                      values=[[0.33], [0.33], [0.34]],
+                      state_names={'UserType': ['Tech', 'Fashion', 'Sports']})
+
+cpd_item = TabularCPD(variable='ItemCategory', variable_card=3,
+                      values=[[0.33], [0.33], [0.34]],
+                      state_names={'ItemCategory': ['Tech', 'Fashion', 'Sports']})
+
+# Interaction probability depends on match between UserType and ItemCategory
+# If they match, high chance of click
+cpd_interaction = TabularCPD(variable='Interaction', variable_card=2,
+    values=[
+        [0.9, 0.2, 0.2, 0.2, 0.9, 0.2, 0.2, 0.2, 0.9],  # Click=Yes
+        [0.1, 0.8, 0.8, 0.8, 0.1, 0.8, 0.8, 0.8, 0.1],  # Click=No
+    ],
+    evidence=['UserType', 'ItemCategory'],
+    evidence_card=[3, 3],
+    state_names={
+        'Interaction': ['Click', 'NoClick'],
+        'UserType': ['Tech', 'Fashion', 'Sports'],
+        'ItemCategory': ['Tech', 'Fashion', 'Sports']
+    }
+)
+
+# Step 3: Add CPDs and validate model
+model.add_cpds(cpd_user, cpd_item, cpd_interaction)
+assert model.check_model()
+
+# Step 4: Generate samples (simulate real-time interactions)
+sampler = BayesianModelSampling(model)
+samples = sampler.forward_sample(size=500)
+
+# Step 5: Filter for interactions (simulate what a user clicked on)
+click_data = samples[samples['Interaction'] == 'Click']
+
+# Step 6: Estimate user preferences from clicks
+user_type_distribution = click_data['UserType'].value_counts(normalize=True)
+print("Estimated user profile based on interaction:")
+print(user_type_distribution)
+
+# Step 7: Recommend based on highest likelihood
+most_likely_type = user_type_distribution.idxmax()
+print(f"\nRecommended Category Based on Inferred Preference: {most_likely_type}")
